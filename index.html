@@ -12,7 +12,7 @@ body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(
 main{max-width:980px;margin:0 auto;padding:16px}
 h1{font-size:22px;margin:8px 0 2px}
 .sub{color:var(--mu);margin:0 0 16px}
-.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 .tabs button,.btn{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 14px;border-radius:8px;cursor:pointer;font:inherit}
 .tabs button.on,.btn.pri{background:var(--ac);border-color:var(--ac);color:#fff}
 .panel{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
@@ -22,8 +22,7 @@ select,input[type=text]{width:100%;padding:8px;border-radius:8px;border:1px soli
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chips label{border:1px solid var(--bd);border-radius:20px;padding:4px 12px;cursor:pointer;font-size:13px}
 .chips input{display:none}
-.chips input:checked+span{color:var(--ac);font-weight:700}
-.chips label:has(input:checked){border-color:var(--ac)}
+.chips label:has(input:checked){border-color:var(--ac);color:var(--ac);font-weight:700}
 .bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .days{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .days button{border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;padding:6px 12px;cursor:pointer}
@@ -62,7 +61,7 @@ details ol{margin:6px 0 0;padding-left:20px}
     <div class="chips" id="eq"></div>
     <div class="bar"><button class="btn pri" id="go">Generate plan</button><button class="btn" id="print">Print / save PDF</button></div>
   </div>
-  <div id="plan"><div class="empty">Choose your options and hit “Generate plan”.</div></div>
+  <div id="plan"><div class="empty">Loading exercises…</div></div>
 </section>
 
 <section id="v2" hidden>
@@ -80,7 +79,8 @@ details ol{margin:6px 0 0;padding-left:20px}
 <p class="foot">Exercise data &amp; media from <a href="https://github.com/hasaneyldrm/exercises-dataset">hasaneyldrm/exercises-dataset</a>. Media © <a href="https://gymvisual.com/">Gym visual</a>. General fitness info only, not medical advice.</p>
 </main>
 <script>
-const MEDIA='https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/';
+const RAW='https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/';
+const JSON_URL=RAW+'data/exercises.json';
 const EQ={'Bodyweight':['body weight','weighted'],'Dumbbells':['dumbbell'],'Barbell':['barbell','ez barbell','olympic barbell','trap bar'],'Cables':['cable','rope'],'Machines':['leverage machine','smith machine','sled machine','assisted','stepmill machine','skierg machine','hammer'],'Bands':['band','resistance band'],'Kettlebell':['kettlebell'],'Other':['stability ball','medicine ball','bosu ball','roller','wheel roller','tire']};
 const SPLITS={
  full:{Full:['pectorals','lats','quads','hamstrings|glutes','delts','abs']},
@@ -99,15 +99,19 @@ const GOAL={str:{sets:[3,4,5],reps:'4-6',rest:'2-3 min'},hyp:{sets:[3,3,4],reps:
 const $=s=>document.querySelector(s);
 let DATA=[],plan=null,cur=0;
 
-// equipment chips
 $('#eq').innerHTML=Object.keys(EQ).map(k=>`<label><input type="checkbox" value="${k}" ${['Bodyweight','Dumbbells'].includes(k)?'checked':''}><span>${k}</span></label>`).join('');
 const allowed=()=>new Set([...document.querySelectorAll('#eq input:checked')].flatMap(i=>EQ[i.value]));
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function stepsFor(e){
+  if(e.instruction_steps && Array.isArray(e.instruction_steps.en) && e.instruction_steps.en.length) return e.instruction_steps.en;
+  if(e.instructions && e.instructions.en) return e.instructions.en.split(/(?<=[.!])\s+/).filter(Boolean);
+  return [];
+}
 
 function pool(target,eq,used){
   const ts=target.split('|');
-  return DATA.filter(e=>ts.includes(e.t)&&e.b!=='cardio'&&eq.has(e.q)&&!used.has(e.id));
+  return DATA.filter(e=>ts.includes(e.target)&&e.body_part!=='cardio'&&eq.has(e.equipment)&&!used.has(e.id));
 }
 function rx(slotIdx){
   const g=GOAL[$('#goal').value],l=+$('#lvl').value;
@@ -137,10 +141,12 @@ function render(){
   const day=plan[cur];
   $('#day').innerHTML=day.ex.map((x,i)=>{
     const e=DATA.find(d=>d.id===x.id);
-    return `<div class="ex ${x.done?'done':''}"><img loading="lazy" src="${MEDIA+e.g}" alt="${esc(e.n)}">
-    <div><h3>${esc(e.n)}</h3><span class="tag">${esc(e.t)}</span><span class="tag">${esc(e.q)}</span>
+    if(!e) return '';
+    const steps=stepsFor(e);
+    return `<div class="ex ${x.done?'done':''}"><img loading="lazy" src="${RAW+e.gif_url}" alt="${esc(e.name)}">
+    <div><h3>${esc(e.name)}</h3><span class="tag">${esc(e.target)}</span><span class="tag">${esc(e.equipment)}</span>
     <div class="rx">${x.sets} sets × ${x.reps} reps · rest ${x.rest}</div>
-    <details><summary>How to do it</summary><ol>${e.i.map(s=>`<li>${esc(s)}</li>`).join('')}</ol></details>
+    <details><summary>How to do it</summary><ol>${steps.map(s=>`<li>${esc(s)}</li>`).join('') || '<li>No instructions available.</li>'}</ol></details>
     <div class="acts"><label><input type="checkbox" data-i="${i}" class="chk" ${x.done?'checked':''}> Done</label><button class="btn" data-sw="${i}">Swap</button></div></div></div>`;
   }).join('')||'<div class="empty">No exercises match your equipment for this day.</div>';
   $('#day').querySelectorAll('.chk').forEach(c=>c.onchange=()=>{day.ex[c.dataset.i].done=c.checked;save();render()});
@@ -149,23 +155,25 @@ function render(){
 function swap(i){
   const x=plan[cur].ex[i],old=DATA.find(d=>d.id===x.id),eq=allowed();
   const used=new Set(plan.flatMap(d=>d.ex.map(e=>e.id)));
-  const p=DATA.filter(e=>e.t===old.t&&e.b!=='cardio'&&eq.has(e.q)&&!used.has(e.id));
+  const p=DATA.filter(e=>e.target===old.target&&e.body_part!=='cardio'&&eq.has(e.equipment)&&!used.has(e.id));
   if(!p.length){alert('No other matching exercise for your equipment.');return}
   x.id=pick(p).id;x.done=false;save();render();
 }
 function save(){try{localStorage.setItem('gymplan',JSON.stringify(plan))}catch(e){}}
 function load(){try{const s=localStorage.getItem('gymplan');if(s)plan=JSON.parse(s)}catch(e){}}
 
-// library
 let libList=[],shown=0;
 function libFilter(){
   const q=$('#q').value.toLowerCase(),b=$('#fb').value,e=$('#fq').value;
-  libList=DATA.filter(x=>(!q||x.n.includes(q)||x.t.includes(q))&&(!b||x.b===b)&&(!e||x.q===e));
+  libList=DATA.filter(x=>(!q||x.name.toLowerCase().includes(q)||x.target.toLowerCase().includes(q))&&(!b||x.body_part===b)&&(!e||x.equipment===e));
   shown=0;$('#lib').innerHTML='';libMore();
 }
 function libMore(){
   const s=libList.slice(shown,shown+20);shown+=s.length;
-  $('#lib').insertAdjacentHTML('beforeend',s.map(e=>`<div class="ex"><img loading="lazy" src="${MEDIA+e.g}" alt="${esc(e.n)}"><div><h3>${esc(e.n)}</h3><span class="tag">${esc(e.b)}</span><span class="tag">${esc(e.t)}</span><span class="tag">${esc(e.q)}</span><details><summary>How to do it</summary><ol>${e.i.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></details></div></div>`).join('')||'<div class="empty">No results.</div>');
+  $('#lib').insertAdjacentHTML('beforeend',s.map(e=>{
+    const steps=stepsFor(e);
+    return `<div class="ex"><img loading="lazy" src="${RAW+e.gif_url}" alt="${esc(e.name)}"><div><h3>${esc(e.name)}</h3><span class="tag">${esc(e.body_part)}</span><span class="tag">${esc(e.target)}</span><span class="tag">${esc(e.equipment)}</span><details><summary>How to do it</summary><ol>${steps.map(x=>`<li>${esc(x)}</li>`).join('') || '<li>No instructions available.</li>'}</ol></details></div></div>`;
+  }).join('')||'<div class="empty">No results.</div>');
   $('#more').hidden=shown>=libList.length;
 }
 
@@ -177,12 +185,13 @@ $('#t1').onclick=()=>tab(1);$('#t2').onclick=()=>tab(2);
 $('#go').onclick=generate;$('#print').onclick=()=>print();
 $('#q').oninput=libFilter;$('#fb').onchange=libFilter;$('#fq').onchange=libFilter;$('#more').onclick=libMore;
 
-fetch('data/exercises.min.json').then(r=>r.json()).then(d=>{
+fetch(JSON_URL).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }).then(d=>{
   DATA=d;
   const opt=(k)=>'<option value="">All</option>'+[...new Set(DATA.map(e=>e[k]))].sort().map(v=>`<option>${v}</option>`).join('');
-  $('#fb').innerHTML=opt('b');$('#fq').innerHTML=opt('q');
+  $('#fb').innerHTML=opt('body_part');$('#fq').innerHTML=opt('equipment');
   load();render();libFilter();
-}).catch(()=>{$('#plan').innerHTML='<div class="empty">Could not load exercise data. If opened from a file, run a local server (python3 -m http.server) or use GitHub Pages.</div>'});
+  if(!plan) $('#plan').innerHTML='<div class="empty">Choose your options and hit “Generate plan”.</div>';
+}).catch(err=>{$('#plan').innerHTML=`<div class="empty">Could not load exercise data (${esc(err.message)}). Check your internet connection or try again.</div>`});
 </script>
 </body>
 </html>

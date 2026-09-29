@@ -44,52 +44,57 @@ select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--bd);backg
   <div class="count" id="count"></div>
 </div>
 
-<div id="view"></div>
+<div id="view"><div class="empty">Loading exercises…</div></div>
 
 <p class="foot">Exercise data &amp; media from <a href="https://github.com/hasaneyldrm/exercises-dataset">hasaneyldrm/exercises-dataset</a>. Media © <a href="https://gymvisual.com/">Gym visual</a>.</p>
 </main>
 <script>
-const MEDIA='https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/';
+const RAW='https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/';
+const JSON_URL=RAW+'data/exercises.json';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let DATA=[];
 
-function opts(sel,values,label){
-  sel.innerHTML=`<option value="">All</option>`+values.map(v=>`<option>${esc(v)}</option>`).join('');
+function opts(sel,values){ sel.innerHTML='<option value="">All</option>'+values.map(v=>`<option>${esc(v)}</option>`).join(''); }
+function stepsFor(e){
+  if(e.instruction_steps && Array.isArray(e.instruction_steps.en) && e.instruction_steps.en.length) return e.instruction_steps.en;
+  if(e.instructions && e.instructions.en) return e.instructions.en.split(/(?<=[.!])\s+/).filter(Boolean);
+  return [];
 }
 function filtered(){
   const c=$('#fc').value,b=$('#fb').value,q=$('#fq').value,t=$('#ft').value;
-  return DATA.filter(e=>(!c||e.c===c)&&(!b||e.b===b)&&(!q||e.q===q)&&(!t||e.t===t));
+  return DATA.filter(e=>(!c||e.category===c)&&(!b||e.body_part===b)&&(!q||e.equipment===q)&&(!t||e.target===t));
 }
 function refreshNames(){
   const list=filtered();
-  $('#fn').innerHTML=list.map(e=>`<option value="${e.id}">${esc(e.n)}</option>`).join('')||'<option value="">No exercises found</option>';
+  $('#fn').innerHTML=list.map(e=>`<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('')||'<option value="">No exercises found</option>';
   $('#count').textContent=`${list.length} exercise${list.length===1?'':'s'} match`;
   showExercise();
 }
 function showExercise(){
   const id=$('#fn').value,e=DATA.find(x=>x.id===id);
   if(!e){$('#view').innerHTML='<div class="empty">No exercises found for the selected filters.</div>';return}
+  const steps=stepsFor(e);
   $('#view').innerHTML=`<div class="card">
-    <img src="${MEDIA+e.g}" alt="${esc(e.n)}" loading="lazy">
-    <h2>${esc(e.n)}</h2>
-    <div class="tags"><span class="tag">${esc(e.c)}</span><span class="tag">${esc(e.b)}</span><span class="tag">${esc(e.q)}</span><span class="tag">${esc(e.t)}</span></div>
+    <img src="${RAW+e.gif_url}" alt="${esc(e.name)}" loading="lazy">
+    <h2>${esc(e.name)}</h2>
+    <div class="tags"><span class="tag">${esc(e.category)}</span><span class="tag">${esc(e.body_part)}</span><span class="tag">${esc(e.equipment)}</span><span class="tag">${esc(e.target)}</span></div>
     <strong>Instructions</strong>
-    <ol>${e.i.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>
+    <ol>${steps.map(s=>`<li>${esc(s)}</li>`).join('') || '<li>No instructions available.</li>'}</ol>
   </div>`;
 }
 
 ['fc','fb','fq','ft'].forEach(id=>$('#'+id).addEventListener('change',refreshNames));
 $('#fn').addEventListener('change',showExercise);
 
-fetch('data/exercises.min.json').then(r=>r.json()).then(d=>{
-  DATA=d.map(e=>({...e,c:e.b})); // category mirrors body_part in this dataset
-  opts($('#fc'),[...new Set(DATA.map(e=>e.c))].sort());
-  opts($('#fb'),[...new Set(DATA.map(e=>e.b))].sort());
-  opts($('#fq'),[...new Set(DATA.map(e=>e.q))].sort());
-  opts($('#ft'),[...new Set(DATA.map(e=>e.t))].sort());
+fetch(JSON_URL).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }).then(d=>{
+  DATA=d;
+  opts($('#fc'),[...new Set(DATA.map(e=>e.category))].sort());
+  opts($('#fb'),[...new Set(DATA.map(e=>e.body_part))].sort());
+  opts($('#fq'),[...new Set(DATA.map(e=>e.equipment))].sort());
+  opts($('#ft'),[...new Set(DATA.map(e=>e.target))].sort());
   refreshNames();
-}).catch(()=>{$('#view').innerHTML='<div class="empty">Could not load exercise data. Serve this folder with a local server or via GitHub Pages — opening the file directly won\'t work.</div>'});
+}).catch(err=>{ $('#view').innerHTML=`<div class="empty">Could not load exercise data (${esc(err.message)}). Check your internet connection or try again.</div>`; });
 </script>
 </body>
 </html>
