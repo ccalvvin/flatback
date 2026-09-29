@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exercise Explorer</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#14171c;--mu:#5f6875;--ac:#e8590c;--bd:#e2e5ea}
+@media (prefers-color-scheme:dark){:root{--bg:#101215;--card:#1a1d22;--tx:#eceff3;--mu:#98a1ae;--ac:#ff8a4c;--bd:#2a2f37}}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+main{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:8px 0 2px}
+.sub{color:var(--mu);margin:0 0 16px}
+.panel{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+label{display:block;font-weight:600;font-size:13px;margin-bottom:4px}
+select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font:inherit}
+.count{color:var(--mu);font-size:13px;margin-top:10px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px}
+.card img{width:100%;max-width:280px;border-radius:8px;background:#fff;display:block;margin:0 auto 14px}
+.card h2{margin:0 0 6px;text-transform:capitalize;text-align:center}
+.tags{text-align:center;margin-bottom:10px}
+.tag{display:inline-block;font-size:12px;color:var(--mu);border:1px solid var(--bd);border-radius:12px;padding:0 10px;margin:0 3px}
+.card ol{padding-left:20px;margin:8px 0 0}
+.empty{color:var(--mu);text-align:center;padding:30px}
+.foot{color:var(--mu);font-size:12px;margin-top:24px}
+.foot a{color:var(--mu)}
+</style>
+</head>
+<body>
+<main>
+<h1>🔍 Exercise Explorer</h1>
+<p class="sub">Filter the dataset to find and view a single exercise, GIF included. <a href="index.html">← Back to Gym Planner</a></p>
+
+<div class="panel">
+  <div class="grid">
+    <div><label>Category</label><select id="fc"></select></div>
+    <div><label>Body part</label><select id="fb"></select></div>
+    <div><label>Equipment</label><select id="fq"></select></div>
+    <div><label>Target muscle</label><select id="ft"></select></div>
+  </div>
+  <div style="margin-top:12px"><label>Exercise</label><select id="fn"></select></div>
+  <div class="count" id="count"></div>
+</div>
+
+<div id="view"></div>
+
+<p class="foot">Exercise data &amp; media from <a href="https://github.com/hasaneyldrm/exercises-dataset">hasaneyldrm/exercises-dataset</a>. Media © <a href="https://gymvisual.com/">Gym visual</a>.</p>
+</main>
+<script>
+const MEDIA='https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let DATA=[];
+
+function opts(sel,values,label){
+  sel.innerHTML=`<option value="">All</option>`+values.map(v=>`<option>${esc(v)}</option>`).join('');
+}
+function filtered(){
+  const c=$('#fc').value,b=$('#fb').value,q=$('#fq').value,t=$('#ft').value;
+  return DATA.filter(e=>(!c||e.c===c)&&(!b||e.b===b)&&(!q||e.q===q)&&(!t||e.t===t));
+}
+function refreshNames(){
+  const list=filtered();
+  $('#fn').innerHTML=list.map(e=>`<option value="${e.id}">${esc(e.n)}</option>`).join('')||'<option value="">No exercises found</option>';
+  $('#count').textContent=`${list.length} exercise${list.length===1?'':'s'} match`;
+  showExercise();
+}
+function showExercise(){
+  const id=$('#fn').value,e=DATA.find(x=>x.id===id);
+  if(!e){$('#view').innerHTML='<div class="empty">No exercises found for the selected filters.</div>';return}
+  $('#view').innerHTML=`<div class="card">
+    <img src="${MEDIA+e.g}" alt="${esc(e.n)}" loading="lazy">
+    <h2>${esc(e.n)}</h2>
+    <div class="tags"><span class="tag">${esc(e.c)}</span><span class="tag">${esc(e.b)}</span><span class="tag">${esc(e.q)}</span><span class="tag">${esc(e.t)}</span></div>
+    <strong>Instructions</strong>
+    <ol>${e.i.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>
+  </div>`;
+}
+
+['fc','fb','fq','ft'].forEach(id=>$('#'+id).addEventListener('change',refreshNames));
+$('#fn').addEventListener('change',showExercise);
+
+fetch('data/exercises.min.json').then(r=>r.json()).then(d=>{
+  DATA=d.map(e=>({...e,c:e.b})); // category mirrors body_part in this dataset
+  opts($('#fc'),[...new Set(DATA.map(e=>e.c))].sort());
+  opts($('#fb'),[...new Set(DATA.map(e=>e.b))].sort());
+  opts($('#fq'),[...new Set(DATA.map(e=>e.q))].sort());
+  opts($('#ft'),[...new Set(DATA.map(e=>e.t))].sort());
+  refreshNames();
+}).catch(()=>{$('#view').innerHTML='<div class="empty">Could not load exercise data. Serve this folder with a local server or via GitHub Pages — opening the file directly won\'t work.</div>'});
+</script>
+</body>
+</html>
