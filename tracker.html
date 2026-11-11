@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SG Parcel Tracker</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#14171c;--mu:#5f6875;--ac:#0b7285;--bd:#e2e5ea;--ok:#2b8a3e;--warn:#e8590c}
+@media (prefers-color-scheme:dark){:root{--bg:#101215;--card:#1a1d22;--tx:#eceff3;--mu:#98a1ae;--ac:#3bc9db;--bd:#2a2f37;--ok:#69db7c;--warn:#ff8a4c}}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+main{max-width:980px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:8px 0 2px}
+h2{font-size:16px;margin:0 0 10px}
+.sub{color:var(--mu);margin:0 0 16px}
+.panel{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{min-width:0}
+input[type=text],select{padding:9px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font:inherit}
+#num{flex:1 1 260px;font-family:ui-monospace,monospace;text-transform:uppercase}
+#nick{flex:1 1 160px}
+#carrier{flex:1 1 200px}
+.btn{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 14px;border-radius:8px;cursor:pointer;font:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn.pri{background:var(--ac);border-color:var(--ac);color:#fff}
+.btn.sm{padding:3px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:default}
+.det{margin-top:12px;font-size:14px}
+.pill{display:inline-block;border:1px solid var(--ac);color:var(--ac);border-radius:14px;padding:1px 10px;margin:2px 4px 2px 0;font-size:13px;font-weight:600}
+.pill.lo{border-color:var(--bd);color:var(--mu);font-weight:400}
+.links{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:10px}
+.links a{display:block;border:1px solid var(--bd);border-radius:10px;padding:8px 12px;color:var(--tx);text-decoration:none;background:var(--bg)}
+.links a:hover{border-color:var(--ac)}
+.links a b{display:block;font-size:14px}
+.links a span{font-size:12px;color:var(--mu)}
+.note{font-size:13px;color:var(--mu);margin:10px 0 0}
+.note.warn{color:var(--warn)}
+#YQContainer{margin-top:12px;min-height:0}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid var(--bd);border-radius:10px;padding:10px 12px}
+.item .meta{flex:1 1 220px;min-width:0}
+.item .meta b{display:block;overflow-wrap:anywhere}
+.item code{font-size:13px;overflow-wrap:anywhere}
+.item small{color:var(--mu);display:block}
+.item.done{opacity:.55}
+.item.done b::after{content:" ✓ delivered";color:var(--ok);font-weight:600;font-size:12px}
+.empty{color:var(--mu);text-align:center;padding:20px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:calc(100% - 32px)}
+.toast.on{opacity:1}
+.foot{color:var(--mu);font-size:12px;margin-top:24px}
+.foot a{color:var(--mu)}
+details summary{cursor:pointer;color:var(--mu);font-size:13px}
+table{border-collapse:collapse;font-size:13px;width:100%}
+td,th{border-bottom:1px solid var(--bd);padding:4px 6px;text-align:left;vertical-align:top}
+.tw{overflow-x:auto}
+</style>
+</head>
+<body>
+<main>
+<h1>📦 SG Parcel Tracker</h1>
+<p class="sub">Track Singapore couriers (SingPost, Ninja Van, J&amp;T, SPX, Lazada, Qxpress…) and China / Pinduoduo shipments in one place. Your parcel list is saved in this browser only.</p>
+
+<div class="panel">
+  <div class="row">
+    <input type="text" id="num" placeholder="Tracking number, e.g. YJD5701039652016" autocomplete="off" spellcheck="false">
+    <button class="btn pri" id="go">Track</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <select id="carrier" aria-label="Carrier"></select>
+    <input type="text" id="nick" placeholder="Nickname (optional), e.g. PDD phone case">
+    <button class="btn" id="save">＋ Save to my parcels</button>
+  </div>
+  <div class="det" id="det"></div>
+  <div class="links" id="links"></div>
+  <p class="note" id="hint"></p>
+  <div id="YQContainer"></div>
+</div>
+
+<div class="panel">
+  <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+    <h2 style="margin:0">My parcels</h2>
+    <div class="row">
+      <button class="btn sm" id="hideDone">Hide delivered</button>
+      <button class="btn sm" id="exp">Export</button>
+      <button class="btn sm" id="imp">Import</button>
+    </div>
+  </div>
+  <div class="list" id="list"></div>
+</div>
+
+<div class="panel">
+  <details>
+    <summary>Which tracking number formats are recognised?</summary>
+    <div class="tw"><table id="fmt"><thead><tr><th>Carrier</th><th>Typical format</th></tr></thead><tbody></tbody></table></div>
+    <p class="note">Detection is a best guess from the number's shape. If it guesses wrong, pick the carrier manually from the dropdown. The live result box (powered by 17TRACK) auto-detects the carrier on its own.</p>
+  </details>
+</div>
+
+<p class="foot">Live results are provided by the free <a href="https://www.17track.net/en/widget" target="_blank" rel="noopener">17TRACK widget</a>; official links open each carrier's own site. Clicking a carrier link also copies the number to your clipboard, so you can paste it if the site doesn't pre-fill it. ← <a href="index.html">Gym Planner</a></p>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- Carrier catalogue ----------
+// url: function returning a deep link (null = open home page, number is copied to clipboard)
+const C = {
+  auto:      {name:"Auto-detect"},
+  singpost:  {name:"SingPost / SpeedPost", fmt:"RR123456789SG, XZ… (UPU 2 letters + 9 digits + 2 letters)", home:"https://www.singpost.com/track-items", url:n=>"https://www.singpost.com/track-items?trackingid="+n},
+  ninjavan:  {name:"Ninja Van", fmt:"NVSG… (e.g. NVSGSHOPE000123456)", home:"https://www.ninjavan.co/en-sg/tracking", url:n=>"https://www.ninjavan.co/en-sg/tracking?id="+n},
+  spx:       {name:"Shopee Xpress (SPX)", fmt:"SPXSG… / SG…", home:"https://spx.sg/", url:null},
+  lex:       {name:"Lazada Logistics (LEX)", fmt:"LXSG… / LEXSG… / LZDSG…", home:"https://tracker.lel.asia/tracker", url:n=>"https://tracker.lel.asia/tracker?trackingNumber="+n+"&lang=en-SG"},
+  jnt:       {name:"J&T Express SG", fmt:"JNTSG… / 12-digit number", home:"https://www.jtexpress.sg/tracking", url:null},
+  qxpress:   {name:"Qxpress", fmt:"QX… / SG + digits", home:"https://www.qxpress.net/", url:null},
+  teleport:  {name:"Teleport", fmt:"varies", home:"https://www.teleport.asia/track", url:null},
+  janio:     {name:"Janio", fmt:"varies", home:"https://janio.asia/tracking/", url:null},
+  pickupp:   {name:"Pickupp", fmt:"varies", home:"https://sg.pickupp.io/en/tracking", url:null},
+  xdel:      {name:"XDel", fmt:"varies", home:"https://www.xdel.com/track/", url:null},
+  cityLink:  {name:"City-Link Express", fmt:"varies", home:"https://www.citylinkexpress.com/tracking-result/", url:null},
+  dhl:       {name:"DHL (Express / eCommerce)", fmt:"10 digits, or GM/LX… + 16+ digits", home:"https://www.dhl.com/sg-en/home/tracking.html", url:n=>"https://www.dhl.com/sg-en/home/tracking/tracking-express.html?submit=1&tracking-id="+n},
+  fedex:     {name:"FedEx", fmt:"12 or 15 digits", home:"https://www.fedex.com/en-sg/tracking.html", url:n=>"https://www.fedex.com/fedextrack/?trknbr="+n},
+  ups:       {name:"UPS", fmt:"1Z + 16 characters", home:"https://www.ups.com/track", url:n=>"https://www.ups.com/track?loc=en_SG&tracknum="+n},
+  aramex:    {name:"Aramex", fmt:"11 digits", home:"https://www.aramex.com/sg/en/track/shipments", url:n=>"https://www.aramex.com/sg/en/track/results?ShipmentNumber="+n},
+  pdd:       {name:"Pinduoduo / Temu cross-border", fmt:"YJD + digits (e.g. YJD5701039652016), PDD…", home:"https://mobile.yangkeduo.com/", url:null},
+  cainiao:   {name:"Cainiao (AliExpress / Taobao)", fmt:"LP + 14 digits, CNSG…, CNG…", home:"https://global.cainiao.com/", url:n=>"https://global.cainiao.com/newDetail.htm?mailNoList="+n},
+  yunexpress:{name:"YunExpress", fmt:"YT + 16 digits", home:"https://www.yuntrack.com/", url:n=>"https://www.yuntrack.com/parcelTracking?id="+n},
+  fourpx:    {name:"4PX", fmt:"4PX… / P0…", home:"https://track.4px.com/", url:n=>"https://track.4px.com/#/result/0/"+n},
+  sf:        {name:"SF Express 顺丰", fmt:"SF + 12–13 digits", home:"https://www.sf-international.com/sg/en/dynamic_function/waybill/", url:n=>"https://www.sf-international.com/sg/en/dynamic_function/waybill/#search/bill-number/"+n},
+  jd:        {name:"JD Logistics 京东", fmt:"JD + 13+ characters", home:"https://www.jdl.com/", url:null},
+  cnDomestic:{name:"China domestic (ZTO/YTO/STO/Yunda/J&T CN)", fmt:"YT + 13 digits, JT + 13 digits, 12–15 digit numbers", home:"https://www.kuaidi100.com/", url:n=>"https://www.kuaidi100.com/chaxun?nu="+n},
+  chinapost: {name:"China Post / EMS", fmt:"UPU format ending in CN (e.g. LY123456789CN)", home:"https://www.ems.com.cn/", url:null},
+};
+
+// Universal multi-carrier trackers (always shown)
+const UNIVERSAL = [
+  {name:"17TRACK", note:"all carriers, auto-detect", url:n=>"https://t.17track.net/en#nums="+n},
+  {name:"ParcelsApp", note:"all carriers incl. China", url:n=>"https://parcelsapp.com/en/tracking/"+n},
+  {name:"Ship24", note:"all carriers", url:n=>"https://www.ship24.com/tracking?p="+n},
+  {name:"Kuaidi100 快递100", note:"Chinese couriers (PDD legs)", url:n=>"https://www.kuaidi100.com/chaxun?nu="+n},
+];
+
+// Detection rules: [regex, carrier, confidence 2=strong 1=weak]
+const RULES = [
+  [/^YJD\d{8,}$/, "pdd", 2],
+  [/^PDD[A-Z0-9]{6,}$/, "pdd", 2],
+  [/^NV[A-Z0-9]{8,}$/, "ninjavan", 2],
+  [/^SPXSG[A-Z0-9]+$/, "spx", 2],
+  [/^(LXSG|LEXSG|LXAD|LZDSG|LXST)[A-Z0-9]+$/, "lex", 2],
+  [/^JNT[A-Z0-9]+$/, "jnt", 2],
+  [/^QX[A-Z0-9]{6,}$/, "qxpress", 2],
+  [/^1Z[A-Z0-9]{16}$/, "ups", 2],
+  [/^LP\d{14}$/, "cainiao", 2],
+  [/^(CNSG|CNG|CAINIAO)[A-Z0-9]+$/, "cainiao", 2],
+  [/^YT\d{16}$/, "yunexpress", 2],
+  [/^(4PX|P0)[A-Z0-9]{8,}$/, "fourpx", 2],
+  [/^SF\d{12,13}$/, "sf", 2],
+  [/^JD[A-Z0-9]{11,}$/, "jd", 2],
+  [/^(YT|JT)\d{13}$/, "cnDomestic", 2],
+  [/^[A-Z]{2}\d{9}SG$/, "singpost", 2],
+  [/^[A-Z]{2}\d{9}CN$/, "chinapost", 2],
+  [/^[A-Z]{2}\d{9}[A-Z]{2}$/, "singpost", 1],   // inbound international post is delivered by SingPost
+  [/^(GM|LX|RX)\d{16,}$/, "dhl", 2],
+  [/^SG[A-Z0-9]{8,}$/, "spx", 1],
+  [/^SG[A-Z0-9]{8,}$/, "qxpress", 1],
+  [/^\d{10}$/, "dhl", 1],
+  [/^\d{11}$/, "aramex", 1],
+  [/^\d{12}$/, "jnt", 1],
+  [/^(\d{12}|\d{15})$/, "fedex", 1],
+  [/^\d{12,15}$/, "cnDomestic", 1],
+];
+
+const HINTS = {
+  pdd: "Pinduoduo cross-border numbers (like YJD…) are usually issued by PDD's consolidation/forwarding partner, so official carrier sites often don't know them. Best bets: the live box below, the 17TRACK / ParcelsApp / Kuaidi100 links, and the order page in the Pinduoduo app. Once the parcel reaches Singapore, the app usually shows a second, local number (often Ninja Van, J&T or SingPost) — add that one here too.",
+  singpost: "International post (e.g. from AliExpress/Taobao) is handed to SingPost on arrival — use the same number on SingPost.",
+  cnDomestic: "This looks like a China domestic number. If you use a forwarder (ezbuy, Taobao2sg, etc.), this only tracks the leg to the forwarder's warehouse in China.",
+  chinapost: "China Post items are delivered in Singapore by SingPost with the same number.",
+};
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const clean = s => (s||"").toUpperCase().replace(/[\s\-]/g,"");
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let toastT;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("on"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("on"),2200); }
+function copy(n){ try{ navigator.clipboard.writeText(n).then(()=>toast("Copied "+n),()=>{}); }catch(e){} }
+
+function detect(n){
+  const seen = {}, out = [];
+  for (const [re, c, conf] of RULES){
+    if (re.test(n) && !(c in seen)){ seen[c]=1; out.push({c, conf}); }
+  }
+  return out.sort((a,b)=>b.conf-a.conf);
+}
+
+// ---------- storage ----------
+const KEY = "sgParcels.v1";
+function load(){ try{ return JSON.parse(localStorage.getItem(KEY)) || []; }catch(e){ return []; } }
+function store(list){ try{ localStorage.setItem(KEY, JSON.stringify(list)); }catch(e){ toast("Couldn't save (storage blocked)"); } }
+let parcels = load();
+let hideDone = false;
+try{ hideDone = localStorage.getItem(KEY+".hide")==="1"; }catch(e){}
+
+// ---------- UI: carrier select & format table ----------
+$("carrier").innerHTML = Object.entries(C).map(([k,v])=>`<option value="${k}">${esc(v.name)}</option>`).join("");
+$("fmt").tBodies[0].innerHTML = Object.entries(C).filter(([k])=>k!=="auto").map(([,v])=>`<tr><td>${esc(v.name)}</td><td>${esc(v.fmt)}</td></tr>`).join("");
+
+function carrierLink(k, n){
+  const c = C[k]; if (!c || k==="auto") return null;
+  return {name:c.name, note: c.url ? "official site" : "official site · paste number", href: c.url ? c.url(encodeURIComponent(n)) : c.home};
+}
+
+function render(n, forced){
+  const det = $("det"), links = $("links"), hint = $("hint");
+  if (!n){ det.innerHTML=""; links.innerHTML=""; hint.textContent=""; $("YQContainer").innerHTML=""; return; }
+  const found = detect(n);
+  const chosen = forced && forced!=="auto" ? [{c:forced, conf:2}] : found;
+  det.innerHTML = chosen.length
+    ? (forced && forced!=="auto" ? "Carrier: " : "Looks like: ") + chosen.map(x=>`<span class="pill ${x.conf<2?"lo":""}">${esc(C[x.c].name)}${x.conf<2?"?":""}</span>`).join("")
+    : `<span class="pill lo">Unknown format</span> — try the universal trackers below or pick a carrier.`;
+
+  const items = [];
+  chosen.forEach(x=>{ const l=carrierLink(x.c,n); if(l) items.push(l); });
+  UNIVERSAL.forEach(u=>items.push({name:u.name, note:u.note, href:u.url(encodeURIComponent(n))}));
+  links.innerHTML = items.map(l=>`<a href="${esc(l.href)}" target="_blank" rel="noopener" data-copy="${esc(n)}"><b>${esc(l.name)} ↗</b><span>${esc(l.note)}</span></a>`).join("");
+
+  const top = chosen[0] && chosen[0].c;
+  hint.textContent = HINTS[top] || "";
+  hint.className = "note" + (top==="pdd" ? " warn" : "");
+  liveTrack(n);
+}
+
+// ---------- 17TRACK live widget ----------
+let yqLoading = null;
+function loadYQ(){
+  if (window.YQV5) return Promise.resolve();
+  if (yqLoading) return yqLoading;
+  yqLoading = new Promise((res, rej)=>{
+    const s = document.createElement("script");
+    s.src = "https://www.17track.net/externalcall.js";
+    s.onload = ()=> window.YQV5 ? res() : rej();
+    s.onerror = rej;
+    document.body.appendChild(s);
+  });
+  yqLoading.catch(()=>{ yqLoading=null; });
+  return yqLoading;
+}
+function liveTrack(n){
+  const box = $("YQContainer");
+  box.innerHTML = `<p class="note">Loading live tracking…</p>`;
+  loadYQ().then(()=>{
+    box.innerHTML = "";
+    YQV5.trackSingle({YQ_ContainerId:"YQContainer", YQ_Height:560, YQ_Fc:"0", YQ_Lang:"en", YQ_Num:n});
+  }).catch(()=>{
+    box.innerHTML = `<p class="note warn">The live tracking widget couldn't load (offline or blocked by an ad-blocker). Use the links above instead.</p>`;
+  });
+}
+
+// ---------- parcel list ----------
+function fmtDate(t){ return t ? new Date(t).toLocaleString("en-SG",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "never"; }
+function renderList(){
+  const L = $("list");
+  $("hideDone").textContent = hideDone ? "Show delivered" : "Hide delivered";
+  const shown = parcels.filter(p=>!(hideDone && p.done));
+  if (!shown.length){ L.innerHTML = `<div class="empty">${parcels.length ? "All parcels delivered 🎉" : "No saved parcels yet. Enter a number above and press “Save”."}</div>`; return; }
+  L.innerHTML = shown.map(p=>{
+    const cname = C[p.carrier] && p.carrier!=="auto" ? C[p.carrier].name : ((detect(p.num)[0]||{}).c ? C[detect(p.num)[0].c].name : "Unknown carrier");
+    return `<div class="item ${p.done?"done":""}" data-id="${esc(p.id)}">
+      <div class="meta"><b>${esc(p.nick || p.num)}</b><code>${esc(p.num)}</code><small>${esc(cname)} · added ${fmtDate(p.added)} · last checked ${fmtDate(p.checked)}</small></div>
+      <div class="row">
+        <button class="btn sm pri" data-act="track">Track</button>
+        <button class="btn sm" data-act="done">${p.done?"Undo":"Delivered"}</button>
+        <button class="btn sm" data-act="del" aria-label="Delete">✕</button>
+      </div></div>`;
+  }).join("");
+}
+
+function track(){
+  const n = clean($("num").value);
+  $("num").value = n;
+  if (!n){ toast("Enter a tracking number"); return; }
+  const p = parcels.find(x=>x.num===n);
+  if (p){ p.checked = Date.now(); store(parcels); renderList(); }
+  history.replaceState(null, "", "#"+encodeURIComponent(n));
+  render(n, $("carrier").value);
+}
+
+$("go").onclick = track;
+$("num").addEventListener("keydown", e=>{ if(e.key==="Enter") track(); });
+$("carrier").onchange = ()=>{ const n=clean($("num").value); if(n) render(n, $("carrier").value); };
+$("save").onclick = ()=>{
+  const n = clean($("num").value);
+  if (!n){ toast("Enter a tracking number first"); return; }
+  const ex = parcels.find(x=>x.num===n);
+  if (ex){ ex.nick = $("nick").value.trim() || ex.nick; ex.carrier = $("carrier").value; toast("Updated"); }
+  else { parcels.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6), num:n, nick:$("nick").value.trim(), carrier:$("carrier").value, added:Date.now(), checked:null, done:false}); toast("Saved"); }
+  store(parcels); renderList();
+};
+$("list").onclick = e=>{
+  const b = e.target.closest("button[data-act]"); if(!b) return;
+  const id = b.closest(".item").dataset.id, p = parcels.find(x=>x.id===id); if(!p) return;
+  if (b.dataset.act==="track"){ $("num").value=p.num; $("nick").value=p.nick||""; $("carrier").value=p.carrier||"auto"; track(); window.scrollTo({top:0,behavior:"smooth"}); }
+  if (b.dataset.act==="done"){ p.done=!p.done; store(parcels); renderList(); }
+  if (b.dataset.act==="del" && confirm("Remove "+(p.nick||p.num)+"?")){ parcels=parcels.filter(x=>x!==p); store(parcels); renderList(); }
+};
+$("links").addEventListener("click", e=>{ const a=e.target.closest("a[data-copy]"); if(a) copy(a.dataset.copy); });
+$("hideDone").onclick = ()=>{ hideDone=!hideDone; try{ localStorage.setItem(KEY+".hide", hideDone?"1":"0"); }catch(e){} renderList(); };
+$("exp").onclick = ()=>{
+  const blob = new Blob([JSON.stringify(parcels,null,2)],{type:"application/json"});
+  const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="parcels.json"; a.click(); URL.revokeObjectURL(a.href);
+};
+$("imp").onclick = ()=>{
+  const i = document.createElement("input"); i.type="file"; i.accept=".json,application/json";
+  i.onchange = ()=>{ const f=i.files[0]; if(!f) return; f.text().then(t=>{
+    try{ const arr=JSON.parse(t); if(!Array.isArray(arr)) throw 0;
+      let added=0; arr.forEach(p=>{ if(p && p.num && !parcels.some(x=>x.num===p.num)){ parcels.push({id:p.id||Date.now().toString(36)+added, num:clean(p.num), nick:p.nick||"", carrier:C[p.carrier]?p.carrier:"auto", added:p.added||Date.now(), checked:p.checked||null, done:!!p.done}); added++; } });
+      store(parcels); renderList(); toast("Imported "+added+" parcel(s)");
+    }catch(e){ toast("Not a valid parcels.json"); } }); };
+  i.click();
+};
+
+// Allow links like tracker.html#YJD5701039652016
+renderList();
+const h = clean(decodeURIComponent(location.hash.slice(1)));
+if (h){ $("num").value = h; track(); }
+</script>
+</body>
+</html>
